@@ -3,6 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import cvxpy as cp
+from SingleIntegrator import SingleIntegrator as SI
 
 # time info
 T = 10
@@ -13,29 +14,25 @@ t_steps = int(T/dt)
 XC = np.array([[5],[5],[5]]) # obstacle center
 R = 1  # obstacle radius
 
-# agent info
-num_agents = 2
-# X0 = np.array([[[0],[0],[0]],[[0],[0],[0]]])
-# X = np.copy(X0)
-# r = np.array([0.1, 0.1])
-# alpha = np.array([1, 1])
-# k = np.array([1, 1])
+# define cooperative robots
+c_robots = []
+num_c_robots = 5
+c_robots.append( SI(np.array([[0],[0],[0]]), 1, np.array([[10],[10],[11]])) )
+c_robots.append( SI(np.array([[10],[0],[0]]), 1, np.array([[0],[10],[11]]))  )
+c_robots.append( SI(np.array([[10],[3],[9]]), 1, np.array([[0],[3],[9]]))  )
+c_robots.append( SI(np.array([[10],[8],[10]]), 1, np.array([[0],[8],[10]]))  )
+c_robots.append( SI(np.array([[0],[4],[2]]), 1, np.array([[10],[4],[2]]) )  )
 
-X01 = np.array([[0],[0],[0]])
-X1 = np.copy(X01)
-G1 = np.array([[10],[10],[11]])
-r1 = 1 # agent radius
-alpha1 = 10
-k1 = 1
+# define uncooperative robots
+uc_robots = []
+num_uc_robots = 5
+uc_robots.append( SI(np.array([[10],[10],[0]]), 1, np.array([[1],[0],[12]]) ) )
+uc_robots.append( SI(np.array([[2],[10],[5]]), 1, np.array([[2],[0],[5]]) )  )
+uc_robots.append( SI(np.array([[8],[10],[5]]), 1, np.array([[8],[0],[5]]) )  )
+uc_robots.append( SI(np.array([[10],[5],[8]]), 1, np.array([[0],[5],[8]]) )  )
+uc_robots.append( SI(np.array([[4],[0],[2]]), 1, np.array([[4],[10],[2]]) )  )
 
-X02 = np.array([[10],[0],[0]])
-G2 = np.array([[0],[10],[11]])
-X2 = np.copy(X02)
-r2 = 2 # agent radius
-alpha2 = 10
-k2 = 1
-
-# cvxpy setup
+# set up control for uncooperative agents
 u1 = cp.Variable((3,1))
 delta1 = cp.Variable(1)
 V1 = cp.Parameter()
@@ -44,11 +41,14 @@ h1 = cp.Parameter()
 dh1_dx = cp.Parameter((1,3))
 P = np.identity(3)
 
-V1.value = np.linalg.norm(X1[-3:] -  G1)**2
-dV1_dx.value = 2 * (X1[-3:] - G1).T
+alpha1 = 10
+k1 = 1
 
-h1.value = np.linalg.norm(X1[-3:] - XC)**2 - (R + r1)**2
-dh1_dx.value = 2 * (X1[-3:]- XC).T
+V1.value = np.linalg.norm(uc_robots[0].X[-3:] -  uc_robots[0].G)**2
+dV1_dx.value = 2 * (uc_robots[0].X[-3:] - uc_robots[0].G).T
+
+h1.value = np.linalg.norm(uc_robots[0].X[-3:] - XC)**2 - (R + uc_robots[0].R)**2
+dh1_dx.value = 2 * (uc_robots[0].X[-3:]- XC).T
 
 objective1 = cp.Minimize(10 * cp.quad_form(u1,P) + 10 * cp.square(delta1))
 constraint1 = [ ]
@@ -56,26 +56,37 @@ constraint1 += [ dV1_dx @ u1 <= - k1 * V1 + delta1 ] # CLF
 constraint1 += [ dh1_dx @ u1 >= - alpha1 * h1 ] # CBF for obstacle
 prob1 = cp.Problem(objective1, constraint1)
 
+# set up control for cooperative agents
 u2 = cp.Variable((3,1))
 delta2 = cp.Variable(1)
 V2 = cp.Parameter()
 dV2_dx = cp.Parameter((1,3))
 h2 = cp.Parameter()
 dh2_dx = cp.Parameter((1,3))
-h2_a = cp.Parameter()
-dh2_dx_a = cp.Parameter((1,3))
+h2_a = []
+dh2_dx_a = []
 
-V2.value = np.linalg.norm(X2[-3:] -  G2)**2
-dV2_dx.value = 2 * (X2[-3:] - G2).T
+for i in range( num_uc_robots + num_c_robots - 1 ):
+	h2_a.append(cp.Parameter())
+	dh2_dx_a.append(cp.Parameter((1,3)))
 
-h2.value = np.linalg.norm(X2[-3:] - XC)**2 - (R + r2)**2
-dh2_dx.value = 2 * (X2[-3:]- XC).T
+alpha2 = 10
+k2 = 3
+
+V2.value = np.linalg.norm(c_robots[0].X[-3:] -  c_robots[0].G)**2
+dV2_dx.value = 2 * (c_robots[0].X[-3:] - c_robots[0].G).T
+
+h2.value = np.linalg.norm(c_robots[0].X[-3:] - XC)**2 - (R + c_robots[0].R)**2
+dh2_dx.value = 2 * (c_robots[0].X[-3:]- XC).T
 
 objective2 = cp.Minimize(10 * cp.quad_form(u2,P) + 10 * cp.square(delta2))
 constraint2 = [ ]
 constraint2 += [ dV2_dx @ u2 <= - k2 * V2 + delta2 ] # CLF
 constraint2 += [ dh2_dx @ u2 >= - alpha2 * h2 ] # CBF for obstacle
-constraint2 += [ dh2_dx_a @ u2 >= - alpha2 * h2_a ] # CBF for other agents
+
+for i in range( num_uc_robots + num_c_robots - 1 ):
+	constraint2 += [ dh2_dx_a[i] @ u2 >= - alpha2 * h2_a[i] ] # CBF for other agents
+
 prob2 = cp.Problem(objective2, constraint2)
 
 # plot setup
@@ -86,58 +97,60 @@ u, v = np.mgrid[0:2*np.pi:50j, 0:np.pi:50j]
 x = R * np.cos(u)*np.sin(v)
 y = R * np.sin(u)*np.sin(v)
 z = R * np.cos(v)
-ax.plot_surface(x + XC[0], y + XC[1], z + XC[2], color = 'r')
+ax.plot_surface(x + XC[0], y + XC[1], z + XC[2], color = 'orange')
 
 # update dynamics
 for t in range( t_steps ):
 
-	for n in range( num_agents ):
+	for i in range( num_uc_robots ):
+		
+		V1.value = np.linalg.norm(uc_robots[i].X[-3:] -  uc_robots[i].G)**2
+		dV1_dx.value = 2 * (uc_robots[i].X[-3:] - uc_robots[i].G).T
 
-		V1.value = np.linalg.norm(X1[-3:] -  G1)**2
-		dV1_dx.value = 2 * (X1[-3:] - G1).T
-
-		h1.value = np.linalg.norm(X1[-3:] - XC)**2 - (R + r1)**2
-		dh1_dx.value = 2 * (X1[-3:]- XC).T
+		h1.value = np.linalg.norm(uc_robots[i].X[-3:] - XC)**2 - (R + uc_robots[i].R)**2
+		dh1_dx.value = 2 * (uc_robots[i].X[-3:]- XC).T
 
 		prob1.solve()
 		print("status of prob 1: ", prob1.status)
 
-		X1_next = X1[-3:]  + u1.value * dt
-		X1 = np.concatenate((X1, X1_next), axis = 0)
+		X_next = uc_robots[i].X[-3:] + u1.value * dt
+		uc_robots[i].X = np.concatenate((uc_robots[i].X, X_next), axis = 0)
 
-		# robots[0].X
-		# robots[2].X
+	for j in range( num_c_robots ):
 
-		# V1.value = np.linalg.norm(X3[-3:] -  G3)**2
-		# dV1_dx.value = 2 * (X3[-3:] - G3).T
+		V2.value = np.linalg.norm(c_robots[j].X[-3:] -  c_robots[j].G)**2
+		dV2_dx.value = 2 * (c_robots[j].X[-3:] - c_robots[j].G).T
 
-		# h1.value = np.linalg.norm(X3[-3:] - XC)**2 - (R + r1)**2
-		# dh1_dx.value = 2 * (X3[-3:]- XC).T
-		
-		# prob1.solve()
-		# print("status of prob 1: ", prob1.status)
+		h2.value = np.linalg.norm(c_robots[j].X[-3:] - XC)**2 - (R + c_robots[j].R)**2
+		dh2_dx.value = 2 * (c_robots[j].X[-3:]- XC).T
 
-		# X3_next = X3[-3:]  + u1.value * dt
-		# X3 = np.concatenate((X3 X3_next), axis = 0)
-		
+		n = 0 # n-th robot
 
-		V2.value = np.linalg.norm(X2[-3:] -  G2)**2
-		dV2_dx.value = 2 * (X2[-3:] - G2).T
+		for k in range( num_uc_robots ):
+			h2_a[n].value = np.linalg.norm(c_robots[j].X[-3:] - uc_robots[k].X[-3:])**2 - (c_robots[j].R + uc_robots[k].R)**2
+			dh2_dx_a[n].value = 2 * (c_robots[j].X[-3:] - uc_robots[k].X[-3:]).T
+			n = n + 1
 
-		h2.value = np.linalg.norm(X2[-3:] - XC)**2 - (R + r2)**2
-		dh2_dx.value = 2 * (X2[-3:]- XC).T
-
-		h2_a.value = np.linalg.norm(X2[-3:] - X1[-3:])**2 - (r2 + r1)**2
-		dh2_dx_a.value = 2 * (X2[-3:] - X1[-3:]).T
+		for k in range( num_c_robots ):
+			if k == j:
+				continue
+			h2_a[n].value = np.linalg.norm(c_robots[j].X[-3:] - c_robots[k].X[-3:])**2 - (c_robots[j].R + c_robots[k].R)**2
+			dh2_dx_a[n].value = 2 * (c_robots[j].X[-3:] - c_robots[k].X[-3:]).T
+			n = n + 1
 
 		prob2.solve()
 		print("status of prob 2: ", prob2.status)
 
-		X2_next = X2[-3:] + u2.value * dt
-		X2 = np.concatenate((X2, X2_next), axis = 0)
+		X_next = c_robots[j].X[-3:] + u2.value * dt
+		c_robots[j].X = np.concatenate((c_robots[j].X, X_next), axis = 0)
 
-		
-ax.scatter3D(X1[::3], X1[1::3] , X1[2::3])
-ax.scatter3D(X2[::3], X2[1::3] , X2[2::3])
+for j in range( num_c_robots ):
+	ax.scatter3D(c_robots[j].X[::3], c_robots[j].X[1::3] , c_robots[j].X[2::3], color = "blue")
+
+for i in range( num_uc_robots ):
+	ax.scatter3D(uc_robots[i].X[::3], uc_robots[i].X[1::3] , uc_robots[i].X[2::3], color = "red")
+
+plt.xlabel("x")
+plt.ylabel("y")
 
 plt.show()

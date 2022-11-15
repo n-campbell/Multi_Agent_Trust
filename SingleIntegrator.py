@@ -8,8 +8,8 @@ class SingleIntegrator:
 		self.R = r
 
 	def lyapunov(self,G):
-		V = np.linalg.norm(self.X[-3:] -  G)**2
-		dV_dx = 2 * (self.X[-3:] - G).T
+		V = np.linalg.norm(self.X[-3:] -  self.G)**2
+		dV_dx = 2 * (self.X[-3:] - self.G).T
 		return V, dV_dx
 
 	def sphere_barrier(self, r, XC):

@@ -44,11 +44,11 @@ P = np.identity(3)
 alpha1 = 10
 k1 = 1
 
-V1.value = np.linalg.norm(uc_robots[0].X[-3:] -  uc_robots[0].G)**2
-dV1_dx.value = 2 * (uc_robots[0].X[-3:] - uc_robots[0].G).T
+V1.value = uc_robots[0].lyapunov()[0] 
+dV1_dx.value = uc_robots[0].lyapunov()[1]
 
-h1.value = np.linalg.norm(uc_robots[0].X[-3:] - XC)**2 - (R + uc_robots[0].R)**2
-dh1_dx.value = 2 * (uc_robots[0].X[-3:]- XC).T
+h1.value = uc_robots[0].sphere_obstacle(R, XC)[0]
+dh1_dx.value = uc_robots[0].sphere_obstacle(R, XC)[1]
 
 objective1 = cp.Minimize(10 * cp.quad_form(u1,P) + 10 * cp.square(delta1))
 constraint1 = [ ]

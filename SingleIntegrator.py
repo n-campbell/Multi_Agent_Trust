@@ -6,21 +6,6 @@ class SingleIntegrator:
 		self.X = x0
 		self.G = G
 		self.R = r
-		# self.U = np.array([0,0]).reshape(-1,1)
-	
-	# def f(self):
-	# 	return np.array([0,0]).reshape(-1,1)
-
-	# def g(self):
-	# 	return np.array([[1,0], [0,1]])
-
-	# def step(self,U):
-	# 	self.U = U.reshape(-1,1)
-	# 	self.X = self.X + (self.f() + self.g() @self.U)*self.dt
-	# 	return self.X
-
-	# def render_plot(self):
-	# 	self.body.set_offsets(self.X[0,0],self.X[1,0])
 
 	def lyapunov(self,G):
 		V = np.linalg.norm(self.X[-3:] -  G)**2

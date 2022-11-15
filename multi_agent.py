@@ -73,11 +73,11 @@ for i in range( num_uc_robots + num_c_robots - 1 ):
 alpha2 = 10
 k2 = 3
 
-V2.value = np.linalg.norm(c_robots[0].X[-3:] -  c_robots[0].G)**2
-dV2_dx.value = 2 * (c_robots[0].X[-3:] - c_robots[0].G).T
+V2.value = c_robots[0].lyapunov()[0] 
+dV2_dx.value = c_robots[0].lyapunov()[0][1] 
 
-h2.value = np.linalg.norm(c_robots[0].X[-3:] - XC)**2 - (R + c_robots[0].R)**2
-dh2_dx.value = 2 * (c_robots[0].X[-3:]- XC).T
+h2.value = c_robots[0].sphere_barrier(R, XC)[0] 
+dh2_dx.value = c_robots[0].sphere_barrier(R, XC)[1]
 
 objective2 = cp.Minimize(10 * cp.quad_form(u2,P) + 10 * cp.square(delta2))
 constraint2 = [ ]
@@ -104,11 +104,11 @@ for t in range( t_steps ):
 
 	for i in range( num_uc_robots ):
 		
-		V1.value = np.linalg.norm(uc_robots[i].X[-3:] -  uc_robots[i].G)**2
-		dV1_dx.value = 2 * (uc_robots[i].X[-3:] - uc_robots[i].G).T
+		V1.value = uc_robots[i].lyapunov()[0] 
+		dV1_dx.value = uc_robots[i].lyapunov()[1]
 
-		h1.value = np.linalg.norm(uc_robots[i].X[-3:] - XC)**2 - (R + uc_robots[i].R)**2
-		dh1_dx.value = 2 * (uc_robots[i].X[-3:]- XC).T
+		h1.value = uc_robots[i].sphere_barrier(R, XC)[0] 
+		dh1_dx.value = uc_robots[i].sphere_barrier(R, XC)[1] 
 
 		prob1.solve()
 		print("status of prob 1: ", prob1.status)
@@ -118,24 +118,24 @@ for t in range( t_steps ):
 
 	for j in range( num_c_robots ):
 
-		V2.value = np.linalg.norm(c_robots[j].X[-3:] -  c_robots[j].G)**2
-		dV2_dx.value = 2 * (c_robots[j].X[-3:] - c_robots[j].G).T
+		V2.value = c_robots[j].lyapunov()[0] 
+		dV2_dx.value = c_robots[j].lyapunov()[1] 
 
-		h2.value = np.linalg.norm(c_robots[j].X[-3:] - XC)**2 - (R + c_robots[j].R)**2
-		dh2_dx.value = 2 * (c_robots[j].X[-3:]- XC).T
+		h2.value = c_robots[j].sphere_barrier(R, XC)[0]
+		dh2_dx.value = c_robots[j].sphere_barrier(R, XC)[1]
 
 		n = 0 # n-th robot
 
 		for k in range( num_uc_robots ):
-			h2_a[n].value = np.linalg.norm(c_robots[j].X[-3:] - uc_robots[k].X[-3:])**2 - (c_robots[j].R + uc_robots[k].R)**2
-			dh2_dx_a[n].value = 2 * (c_robots[j].X[-3:] - uc_robots[k].X[-3:]).T
+			h2_a[n].value = c_robots[j].agent_barrier(uc_robots[k].R, uc_robots[k].X)[0] 
+			dh2_dx_a[n].value = c_robots[j].agent_barrier(uc_robots[k].R, uc_robots[k].X)[1] 
 			n = n + 1
 
 		for k in range( num_c_robots ):
 			if k == j:
 				continue
-			h2_a[n].value = np.linalg.norm(c_robots[j].X[-3:] - c_robots[k].X[-3:])**2 - (c_robots[j].R + c_robots[k].R)**2
-			dh2_dx_a[n].value = 2 * (c_robots[j].X[-3:] - c_robots[k].X[-3:]).T
+			h2_a[n].value = c_robots[j].agent_barrier(uc_robots[k].R, c_robots[k].X)[0]  
+			dh2_dx_a[n].value = c_robots[j].agent_barrier(uc_robots[k].R, c_robots[k].X)[1]
 			n = n + 1
 
 		prob2.solve()

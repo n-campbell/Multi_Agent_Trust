@@ -12,7 +12,7 @@ class SingleIntegrator:
 		dV_dx = 2 * (self.X[-3:] - G).T
 		return V, dV_dx
 
-	def circle_barrier(self, r, XC):
+	def sphere_barrier(self, r, XC):
 		# r: obstacle radius
 		# XC: center of obstacle
 		h = np.linalg.norm(self.X[-3:] - XC)**2 - (self.R + r)**2

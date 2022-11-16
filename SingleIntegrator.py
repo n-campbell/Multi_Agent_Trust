@@ -7,7 +7,7 @@ class SingleIntegrator:
 		self.G = G
 		self.R = r
 
-	def lyapunov(self,G):
+	def lyapunov(self):
 		V = np.linalg.norm(self.X[-3:] -  self.G)**2
 		dV_dx = 2 * (self.X[-3:] - self.G).T
 		return V, dV_dx

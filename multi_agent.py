@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cvxpy as cp
 from SingleIntegrator import SingleIntegrator as SI
+from random import randint
+from matplotlib.animation import FuncAnimation
 
 # time info
 T = 10
@@ -17,20 +19,20 @@ R = 1  # obstacle radius
 # define cooperative robots
 c_robots = []
 c_robots.append(SI(np.array([[0],[0],[0]]), 1, np.array([[10],[10],[11]])))
-# c_robots.append( SI(np.array([[10],[0],[0]]), 1, np.array([[0],[10],[11]])))
-# c_robots.append( SI(np.array([[10],[3],[9]]), 1, np.array([[0],[3],[9]])))
-# c_robots.append( SI(np.array([[10],[8],[10]]), 1, np.array([[0],[8],[10]])))
-# c_robots.append( SI(np.array([[0],[4],[2]]), 1, np.array([[10],[4],[2]])))
+c_robots.append( SI(np.array([[10],[0],[0]]), 1, np.array([[0],[10],[11]])))
+c_robots.append( SI(np.array([[10],[3],[9]]), 1, np.array([[0],[3],[9]])))
+c_robots.append( SI(np.array([[10],[8],[10]]), 1, np.array([[0],[8],[10]])))
+c_robots.append( SI(np.array([[0],[4],[2]]), 1, np.array([[10],[4],[2]])))
 num_c_robots = len(c_robots)
 
 
 # define uncooperative robots
 uc_robots = []
 uc_robots.append( SI(np.array([[10],[10],[0]]), 1, np.array([[1],[0],[12]])))
-# uc_robots.append( SI(np.array([[2],[10],[5]]), 1, np.array([[2],[0],[5]])))
-# uc_robots.append( SI(np.array([[8],[10],[5]]), 1, np.array([[8],[0],[5]])))
-# uc_robots.append( SI(np.array([[10],[5],[8]]), 1, np.array([[0],[5],[8]])))
-# uc_robots.append( SI(np.array([[4],[0],[2]]), 1, np.array([[4],[10],[2]])))
+uc_robots.append( SI(np.array([[2],[10],[5]]), 1, np.array([[2],[0],[5]])))
+uc_robots.append( SI(np.array([[8],[10],[5]]), 1, np.array([[8],[0],[5]])))
+uc_robots.append( SI(np.array([[10],[5],[8]]), 1, np.array([[0],[5],[8]])))
+uc_robots.append( SI(np.array([[4],[0],[2]]), 1, np.array([[4],[10],[2]])))
 num_uc_robots = len(uc_robots)
 
 # define adveserial robots
@@ -72,7 +74,7 @@ dh2_dx = cp.Parameter((1,3))
 h2_a = []
 dh2_dx_a = []
 
-for i in range( num_uc_robots + num_c_robots - 1 ):
+for i in range( num_uc_robots + num_c_robots + num_a_robots - 1 ):
 	h2_a.append(cp.Parameter())
 	dh2_dx_a.append(cp.Parameter((1,3)))
 
@@ -95,32 +97,8 @@ for i in range( num_uc_robots + num_c_robots - 1 ):
 
 prob2 = cp.Problem(objective2, constraint2)
 
-
-# # set up control for adveserial agents
-# u3 = cp.Variable((3,1))
-# delta3 = cp.Variable(1)
-# V3 = cp.Parameter()
-# dV3_dx = cp.Parameter((1,3))
-# h3 = cp.Parameter()
-# dh3_dx = cp.Parameter((1,3))
-# P = np.identity(3)
-
-# alpha3 = 10
-# k3 = 1
-
-# V3.value = a_robots[0].lyapunov()[0] 
-# dV3_dx.value = a_robots[0].lyapunov()[1]
-
-# h3.value = a_robots[0].sphere_barrier(R, XC)[0]
-# dh3_dx.value = a_robots[0].sphere_barrier(R, XC)[1]
-
-# objective3 = cp.Minimize(10 * cp.quad_form(u3,P) + 10 * cp.square(delta3))
-# constraint3 = [ ]
-# constraint3 += [ dV3_dx @ u3 <= - k3 * V3 + delta3 ] # CLF
-# constraint3 += [ dh3_dx @ u3 >= - alpha3 * h3 ] # CBF for obstacle
-# prob3 = cp.Problem(objective3, constraint3)
-
 # plot setup
+plt.ion()
 fig = plt.figure()
 ax = plt.axes(projection='3d')
 
@@ -198,16 +176,21 @@ for t in range( t_steps ):
 			X_next = a_robots[i].X[-3:] + u1.value * dt
 			a_robots[i].X = np.concatenate((a_robots[i].X, X_next), axis = 0)
 
-for j in range( num_c_robots ):
-	ax.scatter3D(c_robots[j].X[::3], c_robots[j].X[1::3] , c_robots[j].X[2::3], color = "green")
+	for j in range( num_c_robots ):
+		ax.scatter3D(c_robots[j].X[::3], c_robots[j].X[1::3] , c_robots[j].X[2::3], color = "green")
 
-for i in range( num_uc_robots ):
-	ax.scatter3D(uc_robots[i].X[::3], uc_robots[i].X[1::3] , uc_robots[i].X[2::3], color = "blue")
+	for i in range( num_uc_robots ):
+		ax.scatter3D(uc_robots[i].X[::3], uc_robots[i].X[1::3] , uc_robots[i].X[2::3], color = "blue")
 
-for i in range( num_a_robots ):
-	ax.scatter3D(a_robots[i].X[::3], a_robots[i].X[1::3] , a_robots[i].X[2::3], color = "red")
+	for i in range( num_a_robots ):
+		ax.scatter3D(a_robots[i].X[::3], a_robots[i].X[1::3] , a_robots[i].X[2::3], color = "red")
 
-plt.xlabel("x")
-plt.ylabel("y")
+	plt.xlabel("x")
+	plt.ylabel("y")
+	plt.draw()
+	plt.pause(0.0001)
+	ax.cla()
+	# plt.show()
 
-plt.show()
+plt.ioff
+plt.close

@@ -1,5 +1,6 @@
 from colorsys import hsv_to_rgb
 import numpy as np 
+from numpy import linalg as LA
 
 class SingleIntegrator:
 	def __init__(self, x0, r, G, alpha = 1, d_thresh = 1, u = np.array([[0],[0],[0]])):
@@ -37,9 +38,9 @@ class SingleIntegrator:
 		# ui_best: velocity input for ego agent in best case
 		# dvj: derivative of lyapunov fucntion of agent j 
 		rho_d = np.tanh( self.dhj @ uj - ( - self.alpha * self.h - self.dhi @ ui_best) ) - np.tanh( self.d_thresh )
-		# nj = - dvj / np.norm(dvj)
-		# theta1 = np.acos( (self.dhj * uj) / (np.norm(self.dhi) * np.norm(uj)) ) #  angle between surface normal and actual agent trajectory
-		# theta2 = np.acos( (self.dhi * nj) / (np.norm(self.dhi) * np.norm(nj)) ) #  angle between surface normal and nominal agent trajectory
+		# nj = - dvj / LA.norm(dvj)
+		# theta1 = np.acos( (self.dhj * uj) / (LA.norm(self.dhi) * LA.norm(uj)) ) #  angle between surface normal and actual agent trajectory
+		# theta2 = np.acos( (self.dhi * nj) / (LA.norm(self.dhi) * LA.norm(nj)) ) #  angle between surface normal and nominal agent trajectory
 		# rho_theta = np.tanh( theta2 / theta1 )
 		# return rho_d[0][0] *  rho_theta[0][0]
 		return rho_d[0][0]

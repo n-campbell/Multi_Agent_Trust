@@ -1,6 +1,6 @@
 from colorsys import hsv_to_rgb
 import numpy as np 
-from numpy import linalg as LA
+from numpy import NAN, linalg as LA
 
 class SingleIntegrator:
 	def __init__(self, x0, r, G, alpha = 1, d_thresh = 1, u = np.array([[0],[0],[0]])):
@@ -17,13 +17,6 @@ class SingleIntegrator:
 		self.dV_dx = 2 * (self.X[-3:] - self.G).T
 		return V, self.dV_dx
 
-	# def sphere_barrier(self, r, XC):
-	# 	# r: obstacle radius
-	# 	# XC: center of obstacle
-	# 	h = np.linalg.norm(self.X[-3:] - XC)**2 - (self.R + r)**2
-	# 	dh_dx = 2 * (self.X[-3:]- XC).T
-	# 	return h, dh_dx
-
 	def agent_barrier(self, r, X):
 		# r: radius of other agent
 		# X: coordinates of other agent
@@ -33,17 +26,52 @@ class SingleIntegrator:
 
 		return self.h, self.dhi, self.dhj
 
-	def agent_alpha(self, uj, ui_best): #, dvj):
+	def agent_alpha(self, uj, ui_best, dvj, n):
 		# uj: velocity input of other agent
 		# ui_best: velocity input for ego agent in best case
 		# dvj: derivative of lyapunov fucntion of agent j 
-		rho_d = np.tanh( self.dhj @ uj - ( - self.alpha * self.h - self.dhi @ ui_best) ) - np.tanh( self.d_thresh )
-		# nj = - dvj / LA.norm(dvj)
-		# theta1 = np.acos( (self.dhj * uj) / (LA.norm(self.dhi) * LA.norm(uj)) ) #  angle between surface normal and actual agent trajectory
-		# theta2 = np.acos( (self.dhi * nj) / (LA.norm(self.dhi) * LA.norm(nj)) ) #  angle between surface normal and nominal agent trajectory
-		# rho_theta = np.tanh( theta2 / theta1 )
-		# return rho_d[0][0] *  rho_theta[0][0]
-		return rho_d[0][0]
+		# n: nth robot for alpha
+		# print(f'self.alpha: {self.alpha[n]}')
+		# print(f'self.dhj: {self.dhj}')
+		# print(f'uj: {uj}')
+		# print(f'self.h: {self.h}')
+		# print(f'self.dhi: {self.dhi}')
+		# print(f'ui_best: {ui_best}')
+		# print(f' self.dhj @ uj: { self.dhj @ uj}')
+		# print(f'- self.alpha * self.h - self.dhi @ ui_best: {- self.alpha[n] * self.h - self.dhi @ ui_best}')
+		# print(f'np.tanh( self.d_thresh): {np.tanh( self.d_thresh )}')
+		rho_d = np.tanh( self.dhj @ uj - ( - self.alpha[n] * self.h - self.dhi @ ui_best) ) - np.tanh( self.d_thresh )
+		nj = (- dvj / LA.norm(dvj)).reshape(-1,1)
+		if LA.norm(uj) <= 0:
+			rho_theta = [[0.0]]
+		else:
+			
+			inner_term = (self.dhj @ uj) / (LA.norm(self.dhj) * LA.norm(uj))
+			# print(f'1st inner term: {inner_term}')
+			if inner_term < -1.0:
+				inner_term = [[-1.0]]
+			elif inner_term > 1.0:
+				inner_term = [[1.0]]
+			theta1 = np.arccos( inner_term ) #  angle between surface normal and actual agent trajectory
+
+			
+			inner_term = (self.dhi @ nj) / (LA.norm(self.dhi) * LA.norm(nj)) 
+			# print(f'2nd inner term: {inner_term}')
+			if inner_term < -1.0:
+				inner_term = [[-1.0]]
+			elif inner_term > 1.0:
+				inner_term = [[1.0]]
+			theta2 = np.arccos( inner_term ) #  angle between surface normal and nominal agent trajectory
+			rho_theta = np.tanh( theta2 / theta1 )
+			# print(f'theta1: {theta1}')
+			
+		# print(f'rho_d: {rho_d}')
+		# print(f'rho_theta: {rho_theta}')
+		# print(f'rho: {rho_d[0][0] *  rho_theta[0][0]}')
+		return rho_d[0][0] *  rho_theta[0][0]
+		
+
+
 
 
 

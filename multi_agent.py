@@ -6,7 +6,8 @@ import cvxpy as cp
 from SingleIntegrator import SingleIntegrator as SI
 from random import randint
 from matplotlib.animation import FuncAnimation
-from numpy import linalg as LA
+from numpy import True_, linalg as LA
+import matplotlib as mpl
 
 
 # time info
@@ -14,30 +15,24 @@ T = 10
 dt = 0.01
 t_steps = int(T/dt)
 
-# define cooperative robots
-c_robots = []
-c_robots.append(SI(np.array([[0],[0],[0]]), 1, np.array([[10],[10],[11]])))
-# c_robots.append( SI(np.array([[10],[0],[0]]), 1, np.array([[0],[10],[11]]),alpha_init))
-# c_robots.append( SI(np.array([[10],[3],[9]]), 1, np.array([[0],[3],[9]]),alpha_init))
-# c_robots.append( SI(np.array([[10],[8],[10]]), 1, np.array([[0],[8],[10]])))
-c_robots.append( SI(np.array([[0],[7],[5]]), 1, np.array([[10],[7],[5]])))
-num_c_robots = len(c_robots)
-print(f'num_c: {num_c_robots}')
-
 
 # define uncooperative robots
 uc_robots = []
-# uc_robots.append( SI(np.array([[10],[10],[0]]), 1, np.array([[1],[0],[12]]),alpha_init))
-uc_robots.append( SI(np.array([[6],[10],[5]]), 1, np.array([[6],[0],[5]])))
-uc_robots.append( SI(np.array([[8],[10],[5]]), 1, np.array([[8],[0],[5]])))
-# uc_robots.append( SI(np.array([[10],[5],[8]]), 1, np.array([[0],[5],[8]]),alpha_init))
-# uc_robots.append( SI(np.array([[4],[0],[2]]), 1, np.array([[4],[10],[2]]),alpha_init))
+uc_robots.append( SI(np.array([[3],[10],[3]]), 1, np.array([[3],[0],[3]])))
+uc_robots.append( SI(np.array([[6],[10],[3]]), 1, np.array([[6],[0],[3]])))
+uc_robots.append( SI(np.array([[9],[10],[3]]), 1, np.array([[9],[0],[3]])))
 num_uc_robots = len(uc_robots)
+
+# define cooperative robots
+c_robots = []
+c_robots.append( SI(np.array([[0],[2],[0]]), 1, np.array([[10],[2],[5]])))
+c_robots.append(SI(np.array([[0],[7],[0]]), 1, np.array([[10],[7],[5]])))
+c_robots.append(SI(np.array([[0],[5],[2]]), 1, np.array([[10],[5],[5]])))
+num_c_robots = len(c_robots)
 
 # define adveserial robots
 a_robots = []
-# a_robots.append( SI(np.array([[0],[0],[0]]), 1, uc_robots[0].X, alpha_init))
-a_robots.append( SI(np.array([[0],[10],[5]]), 1, c_robots[0].X))
+a_robots.append( SI(np.array([[0],[10],[0]]), 1, c_robots[0].X))
 num_a_robots = len(a_robots)
 
 # initialize alphas for ego agents
@@ -60,6 +55,11 @@ dV1_dx.value = uc_robots[0].lyapunov()[1]
 objective1 = cp.Minimize(10 * cp.quad_form(u1,P) + 10 * cp.square(delta1))
 constraint1 = [ ]
 constraint1 += [ dV1_dx @ u1 <= - k1 * V1 + delta1 ] # CLF
+
+input_bound = 0.5
+for i in range(3):
+	constraint1 += [ cp.abs(u1[i,0]) <= input_bound ]
+
 prob1 = cp.Problem(objective1, constraint1)
 
 # set up control for cooperative agents
@@ -68,6 +68,8 @@ delta2 = cp.Variable(1)
 V2 = cp.Parameter()
 dV2_dx = cp.Parameter((1,3))
 P = np.identity(3)
+
+learning_rate = 1
 
 h2_a = []
 dhi2_dx_a = []
@@ -132,23 +134,38 @@ prob_b = cp.Problem(objective_b, constraint_b)
 # plt.ion()
 fig1 = plt.figure()
 ax1 = plt.axes(projection='3d')
+R = 0.3
+u, v = np.mgrid[0:2*np.pi:50j, 0:np.pi:50j]
+x = R * np.cos(u)*np.sin(v)
+y = R * np.sin(u)*np.sin(v)
+z = R * np.cos(v)
+
+# plot start and goal markers for ego agents
+for i in range(num_c_robots):
+	ax1.plot_surface(x + c_robots[i].X[0], y + c_robots[i].X[1], z + c_robots[i].X[2], color = 'yellow')
+	ax1.plot_surface(x + c_robots[i].G[0], y + c_robots[i].G[1], z + c_robots[i].G[2], color = 'green')
 
 # initialize inter-agent distances
-c_dists = np.zeros(( num_c_robots, t_steps, num_c_robots  - 1 ))
+c_dists = np.zeros(( num_c_robots, t_steps, num_c_robots ))
 uc_dists = np.zeros(( num_c_robots, t_steps, num_uc_robots ))
 a_dists = np.zeros(( num_c_robots, t_steps, num_a_robots ))
 
 print(f'c_dists shape: {c_dists.shape}')
 
 # initialize trust metrics
-c_trust = np.zeros(( num_c_robots, t_steps, num_c_robots - 1 ))
+c_trust = np.zeros(( num_c_robots, t_steps, num_c_robots ))
 uc_trust= np.zeros(( num_c_robots, t_steps, num_uc_robots ))
 a_trust = np.zeros(( num_c_robots, t_steps, num_a_robots ))
 
 # initialize trust metrics
-c_alpha = np.zeros(( num_c_robots, t_steps, num_c_robots -1))
+c_alpha = np.zeros(( num_c_robots, t_steps, num_c_robots ))
 uc_alpha = np.zeros(( num_c_robots, t_steps, num_uc_robots ))
 a_alpha = np.zeros(( num_c_robots, t_steps, num_a_robots ))
+
+# initialize trust metrics
+c_h = np.zeros(( num_c_robots, t_steps, num_c_robots ))
+uc_h = np.zeros(( num_c_robots, t_steps, num_uc_robots ))
+a_h= np.zeros(( num_c_robots, t_steps, num_a_robots ))
 
 # update dynamics
 for t in range( t_steps ):
@@ -200,8 +217,11 @@ for t in range( t_steps ):
 			xj_dot_b[n].value = uc_robots[k].u 
 			alpha_b[n].value = c_robots[j].alpha[n]
 
-			# update inter-agent distance
+			# save inter-agent distance
 			uc_dists[j][t][k] = LA.norm( c_robots[j].X[-3:]  - uc_robots[k].X[-3:]  )
+
+			# save cbf
+			uc_h[j][t][k] = h2_a[n].value
 
 			n = n + 1 
 
@@ -221,8 +241,11 @@ for t in range( t_steps ):
 			xj_dot_b[n].value = c_robots[k].u
 			alpha_b[n].value = c_robots[j].alpha[n]
 
-			# update inter-agent distance
-			c_dists[j][t][k-1] = LA.norm( c_robots[j].X[-3:] - c_robots[k].X[-3:] )
+			# save inter-agent distance
+			c_dists[j][t][k] = LA.norm( c_robots[j].X[-3:] - c_robots[k].X[-3:] )
+
+			# save cbf
+			c_h[j][t][k] = h2_a[n].value
 			
 			n = n + 1
 
@@ -240,7 +263,10 @@ for t in range( t_steps ):
 			alpha_b[n].value = c_robots[j].alpha[n]
 
 			# update inter-agent distance
-			a_dists[j][t][k-1] = LA.norm( c_robots[j].X[-3:]  - a_robots[k].X[-3:]  )
+			a_dists[j][t][k] = LA.norm( c_robots[j].X[-3:]  - a_robots[k].X[-3:]  )
+
+			# save cbf
+			a_h[j][t][k] = h2_a[n].value
 
 			n = n + 1
 
@@ -249,15 +275,19 @@ for t in range( t_steps ):
 		for k in range( num_uc_robots ):
 			Q.value = dhi_dx_b[n].value
 			prob_b.solve(solver=cp.GUROBI, reoptimize=True)
-			alpha_dot = c_robots[j].agent_alpha(uc_robots[k].u,u_b.value, uc_robots[k].dV_dx,n) # added
-			alpha = c_robots[j].alpha[n] + alpha_dot * dt
+			if prob_b.status!='optimal':
+				print("Error: LP controller infeasible")
+				exit()
+			alpha_dot = c_robots[j].agent_alpha(uc_robots[k].u,u_b.value, uc_robots[k].dV_dx,n, print_stuff= False) 
+			if alpha_dot == 0.0:
+				print(f'alpha dot for uc_robots:{alpha_dot}')
+			alpha = c_robots[j].alpha[n] + learning_rate * alpha_dot * dt
 			alpha2[n].value  = alpha
 			c_robots[j].alpha[n] = alpha
 
 			# save trust metric
 			uc_trust[j][t][k] = alpha_dot
 			uc_alpha[j][t][k] = alpha
-			# print(f'alpha_dot for uc {k}: {alpha_dot}')
 
 			n = n + 1
 
@@ -266,22 +296,30 @@ for t in range( t_steps ):
 				continue
 			Q.value = dhi_dx_b[n].value
 			prob_b.solve(solver=cp.GUROBI,reoptimize=True )
-			alpha_dot = c_robots[j].agent_alpha(c_robots[k].u, u_b.value, c_robots[k].dV_dx,n) # added
-			alpha = c_robots[j].alpha[n] + alpha_dot * dt
+			if prob_b.status!='optimal':
+				print("Error: LP controller infeasible")
+				exit()
+			alpha_dot = c_robots[j].agent_alpha(c_robots[k].u, u_b.value, c_robots[k].dV_dx,n, print_stuff= True)
+			if alpha_dot == 0.0:
+				print(f'alpha dot for c_robots:{alpha_dot}')
+			alpha = c_robots[j].alpha[n] + learning_rate * alpha_dot * dt
 			alpha2[n].value = alpha
 			c_robots[j].alpha[n] = alpha
 
 			# save trust metric
-			c_trust[j][t][k-1] = alpha_dot
-			c_alpha[j][t][k-1] = alpha
+			c_trust[j][t][k] = alpha_dot
+			c_alpha[j][t][k] = alpha
 
 			n = n + 1
 
 		for k in range( num_a_robots ):
 			Q.value = dhi_dx_b[n].value
 			prob_b.solve(solver=cp.GUROBI, reoptimize=True)
-			alpha_dot = c_robots[j].agent_alpha(a_robots[k].u,u_b.value, a_robots[k].dV_dx, n) # added
-			alpha = c_robots[j].alpha[n] + alpha_dot * dt
+			if prob_b.status!='optimal':
+				print("Error: LP controller infeasible")
+				exit()
+			alpha_dot = c_robots[j].agent_alpha(a_robots[k].u,u_b.value, a_robots[k].dV_dx, n) 
+			alpha = c_robots[j].alpha[n] + learning_rate * alpha_dot * dt
 			alpha2[n].value = alpha
 			c_robots[j].alpha[n] = alpha
 
@@ -300,98 +338,179 @@ for t in range( t_steps ):
 		c_robots[j].X = np.concatenate((c_robots[j].X, X_next), axis = 0)
 		c_robots[j].u = u2.value
 
+		# # plot trajectories for agents LIVE
+		# for j in range( num_c_robots ):
+		# 	ax1.scatter3D(c_robots[j].XX[-3:] , c_robots[j].X[1::3] , c_robots[j].X[2::3], color = 'green')
 
-	cc = np.linspace(100,1101, num = t_steps+1)
+		# for i in range( num_uc_robots ):
+		# 	ax1.scatter3D(uc_robots[i].X[::3], uc_robots[i].X[1::3] , uc_robots[i].X[2::3],color = 'blue') 
 
-# plot trajectories for agents
-for j in range( num_c_robots ):
-	ax1.scatter3D(c_robots[j].X[::3], c_robots[j].X[1::3] , c_robots[j].X[2::3], color = 'green')#, c = cc, cmap = 'summer')
+		# for i in range( num_a_robots ):
+		# 	ax1.scatter3D(a_robots[i].X[::3], a_robots[i].X[1::3] , a_robots[i].X[2::3], color = 'red')
+
+		# fig1.canvas.draw()
+		# fig1.canvas.flush_events()
+		# plt.pause(0.000001)
+		# ax1.cla()
+	
+	print(f'At Timestep: {t}/{t_steps}')
+
+# plot trajectories for agents with colormap
+cc = np.linspace(0,1001, num = t_steps+1)
+ccmap1 = plt.get_cmap('winter_r', t_steps)
+ccmap2 = plt.get_cmap('cool_r', t_steps)
+ccmap3 = plt.get_cmap('autumn_r', t_steps)
 
 for i in range( num_uc_robots ):
-	ax1.scatter3D(uc_robots[i].X[::3], uc_robots[i].X[1::3] , uc_robots[i].X[2::3],color = 'blue') #, c = cc, cmap = 'spring')
+	ax1.scatter3D(uc_robots[i].X[::3], uc_robots[i].X[1::3] , uc_robots[i].X[2::3], c = cc, cmap = 'cool_r')
+
+for j in range( num_c_robots ):
+	ax1.scatter3D(c_robots[j].X[::3], c_robots[j].X[1::3] , c_robots[j].X[2::3], c = cc, cmap = 'winter_r')
 
 for i in range( num_a_robots ):
-	ax1.scatter3D(a_robots[i].X[::3], a_robots[i].X[1::3] , a_robots[i].X[2::3], color = 'red') #, c = cc, cmap = 'autumn')
-
-	# fig1.canvas.draw()
-	# fig1.canvas.flush_events()
-	# plt.pause(0.000001)
-	# ax1.cla()
+	ax1.scatter3D(a_robots[i].X[::3], a_robots[i].X[1::3] , a_robots[i].X[2::3], c = cc, cmap = 'autumn_r')
 
 ax1.set_xlabel('X')
 ax1.set_ylabel('Y')
+ax1.set_zlabel('Z')
 
+# Normalizer
+norm = mpl.colors.Normalize(vmin=0, vmax=t_steps)
+  
+# creating ScalarMappabler
+sm1 = plt.cm.ScalarMappable(cmap=ccmap1 ,norm=norm)
+sm1.set_array([])
+sm2 = plt.cm.ScalarMappable(cmap=ccmap2 ,norm=norm)
+sm2.set_array([])
+sm3 = plt.cm.ScalarMappable(cmap=ccmap3 ,norm=norm)
+sm3.set_array([])
+  
+plt.colorbar(sm1, label = '(Ego) Cooperative')
+plt.colorbar(sm2, label = 'Uncooperative')
+plt.colorbar(sm3, label = 'Adveserial')
 
-
-# cbar = plt.colorbar()
-# cbar.set_label('Color Intensity')
 # plt.ioff
 
+# plot inter-agent distances for ego agent
+def plot_dists(fig, ax, agent_num):
+	legend = []
+	for k in range( num_c_robots ):
+		if k == agent_num:
+			continue
+		ax.plot(c_dists[agent_num,:,k])
+		legend.append(f'Cooperative Agent {k}')
+	for k in range( num_uc_robots ):
+		ax.plot(uc_dists[agent_num,:,k])
+		legend.append(f'Uncooperative Agent {k}')
+	for k in range( num_a_robots ):
+		ax.plot(a_dists[agent_num,:,k])
+		legend.append(f'Adveserial Agent {k}')
+	ax.legend(legend)
+	ax.set_title(f"Inter-Agent Distances for Ego Agent {agent_num}")
+	fig.supxlabel('Timestep')
+	fig.supylabel('Distance (m)')
+	return ax
 
-# plot inter-agent distances for robot 1 
-fig2, ax2 = plt.subplots( 3 )
-ax2[0].set_title(f"Distances Between Ego Agent 1 and Cooperative Agents")
-legend = []
-for k in range( num_c_robots ):
-	ax2[0].plot(c_dists[0,:,k-1])
-	legend.append(f'Cooperative Agent {k}')
-ax2[0].legend(legend)
-ax2[1].set_title(f"Distances Between Ego Agent 1 and Uncooperative Agents")
-legdend = []
-for k in range( num_uc_robots ):
-	ax2[1].plot(uc_dists[0,:,k])
-	legend.append(f'Unooperative Agent {k}')
-ax2[1].legend(legend)
-legend = []
-ax2[2].set_title(f"Distances Between Ego Agent 1 and Adveserial Agents")
-for k in range( num_a_robots ):
-	ax2[2].plot(a_dists[0,:,k], label = f'Adveserial Agent {k}')
-	legend.append(f'Adveserial Agent {k}')
-ax2[2].legend(legend)
 
-plt.subplots_adjust(left=0.1,
-                    bottom=0.1,
-                    right=0.9,
-                    top=0.9,
-                    wspace=0.4,
-                    hspace=0.4)
+# plot inter-agent distances for ego agent 0
+fig2, ax2 = plt.subplots()
+plot_dists(fig2, ax2, 0)
 
-fig2.supxlabel('Time (s)')
-fig2.supylabel('Inter-Agent Distance (meters)')
-fig2.show()
+# # plot inter-agent distances for ego agent 1
+# fig3, ax3 = plt.subplots()
+# plot_dists(fig3, ax3, 1)
 
-# plot alpha dot for robot 1
-fig3, ax3 = plt.subplots()
-legend = []
-for k in range( num_c_robots ):
-	ax3.plot(c_trust[0,:,k-1])
-	legend.append(f'Cooperative Agent {k}')
-for k in range( num_uc_robots ):
-	ax3.plot(uc_trust[0,:,k])
-	legend.append(f'Uncooperative Agent {k}')
-for k in range( num_a_robots ):
-	ax3.plot(a_trust[0,:,k])
-	legend.append(f'Adveserial Agent {k}')
-ax3.legend(legend)
-fig3.supxlabel('Time (s)')
-fig3.supylabel('Alpha Dot')
-fig3.show()
+# # plot inter-agent distances for ego agent 2
+# fig4, ax4 = plt.subplots()
+# plot_dists(fig4, ax4, 2)
 
-# plot alpha for robot 1
-fig4, ax4 = plt.subplots()
-legend = []
-for k in range( num_c_robots ):
-	ax4.plot(c_alpha[0,:,k-1])
-	legend.append(f'Cooperative Agent {k}')
-for k in range( num_uc_robots ):
-	ax4.plot(uc_alpha[0,:,k])
-	legend.append(f'Uncooperative Agent {k}')
-for k in range( num_a_robots ):
-	ax4.plot(a_alpha[0,:,k])
-	legend.append(f'Adveserial Agent {k}')
-ax4.legend(legend)
-fig4.supxlabel('Time (s)')
-fig4.supylabel('Alpha ')
-fig4.show()
+# plot h for ego agents
+def plot_h(fig, ax, agent_num):
+	legend = []
+	for k in range( num_uc_robots ):
+		ax.plot(uc_h[agent_num,:,k])
+		legend.append(f'Uncooperative Agent {k}')
+	for k in range( num_c_robots ):
+		if k == agent_num:
+			continue
+		ax.plot(c_h[agent_num,:,k])
+		legend.append(f'Cooperative Agent {k}')
+	for k in range( num_a_robots ):
+		ax.plot(a_h[agent_num,:,k])
+		legend.append(f'Adveserial Agent {k}')
+	ax.legend(legend)
+	ax.set_title(f"CBFs for Ego Agent {agent_num}")
+	fig.supxlabel('Timestep')
+	fig.supylabel('CBF')
+	return ax
+
+
+# plot cbf for ego agent 0
+fig5, ax5 = plt.subplots()
+plot_h(fig5, ax5, 0)
+
+# # plot cbf for ego agent 1
+# fig6, ax6 = plt.subplots()
+# plot_h(fig6, ax6, 1)
+
+# # plot cbf for ego agent 2
+# fig7, ax7 = plt.subplots()
+# plot_h(fig7, ax7, 2)
+
+# plot alpha for ego agents
+def plot_alpha(fig, ax, agent_num):
+	legend = []
+	for k in range( num_uc_robots ):
+		ax.plot(uc_alpha[agent_num,:,k])
+		legend.append(f'Uncooperative Agent {k}')
+	for k in range( num_c_robots ):
+		if k == agent_num:
+			continue
+		ax.plot(c_alpha[agent_num,:,k])
+		legend.append(f'Cooperative Agent {k}')
+	for k in range( num_a_robots ):
+		ax.plot(a_alpha[agent_num,:,k])
+		legend.append(f'Adveserial Agent {k}')
+	ax.legend(legend)
+	ax.set_title(f"Alphas for Ego Agent {agent_num}")
+	fig.supxlabel('Timestep')
+	fig.supylabel('Alpha ')
+	return ax
+
+# plot alpha for ego agent 0
+fig8, ax8 = plt.subplots()
+plot_alpha(fig8, ax8, 0)
+
+# # plot alpha for ego agent 1
+# fig9, ax9 = plt.subplots()
+# plot_h(fig9, ax9, 1)
+
+# # plot alpha for ego agent 2
+# fig10, ax10 = plt.subplots()
+# plot_dists(fig10, ax10, 2)
+
+# plot alpha for ego agents
+def plot_alpha_dot(fig, ax, agent_num):
+	legend = []
+	for k in range( num_uc_robots ):
+		ax.plot(uc_trust[agent_num,:,k])
+		legend.append(f'Uncooperative Agent {k}')
+	for k in range( num_c_robots ):
+		if k == agent_num:
+			continue
+		ax.plot(c_trust[agent_num,:,k])
+		legend.append(f'Cooperative Agent {k}')
+	for k in range( num_a_robots ):
+		ax.plot(a_trust[agent_num,:,k])
+		legend.append(f'Adveserial Agent {k}')
+	ax.legend(legend)
+	ax.set_title(f"Alpha_dot for Ego Agent {agent_num}")
+	fig.supxlabel('Timestep')
+	fig.supylabel('Alpha_dot ')
+	return ax
+
+# plot alpha dot for ego agent 0
+fig11, ax11 = plt.subplots()
+plot_alpha_dot(fig11, ax11, 0)
 
 plt.show()

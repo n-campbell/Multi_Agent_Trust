@@ -3,7 +3,7 @@ import numpy as np
 from numpy import NAN, linalg as LA
 
 class SingleIntegrator:
-	def __init__(self, x0, r, G, alpha = 1, d_thresh = 1, u = np.array([[0],[0],[0]])):
+	def __init__(self, x0, r, G, alpha = 1, d_thresh = 0.7, u = np.array([[0],[0],[0]])):
 		self.X0 = x0
 		self.X = x0
 		self.G = G
@@ -26,49 +26,46 @@ class SingleIntegrator:
 
 		return self.h, self.dhi, self.dhj
 
-	def agent_alpha(self, uj, ui_best, dvj, n):
+	def agent_alpha(self, uj, ui_best, dvj, n, print_stuff= False):
 		# uj: velocity input of other agent
 		# ui_best: velocity input for ego agent in best case
 		# dvj: derivative of lyapunov fucntion of agent j 
 		# n: nth robot for alpha
-		# print(f'self.alpha: {self.alpha[n]}')
-		# print(f'self.dhj: {self.dhj}')
-		# print(f'uj: {uj}')
-		# print(f'self.h: {self.h}')
-		# print(f'self.dhi: {self.dhi}')
-		# print(f'ui_best: {ui_best}')
-		# print(f' self.dhj @ uj: { self.dhj @ uj}')
-		# print(f'- self.alpha * self.h - self.dhi @ ui_best: {- self.alpha[n] * self.h - self.dhi @ ui_best}')
-		# print(f'np.tanh( self.d_thresh): {np.tanh( self.d_thresh )}')
+		
 		rho_d = np.tanh( self.dhj @ uj - ( - self.alpha[n] * self.h - self.dhi @ ui_best) ) - np.tanh( self.d_thresh )
 		nj = (- dvj / LA.norm(dvj)).reshape(-1,1)
 		if LA.norm(uj) <= 0:
 			rho_theta = [[0.0]]
 		else:
-			
 			inner_term = (self.dhj @ uj) / (LA.norm(self.dhj) * LA.norm(uj))
-			# print(f'1st inner term: {inner_term}')
 			if inner_term < -1.0:
 				inner_term = [[-1.0]]
 			elif inner_term > 1.0:
 				inner_term = [[1.0]]
 			theta1 = np.arccos( inner_term ) #  angle between surface normal and actual agent trajectory
 
-			
-			inner_term = (self.dhi @ nj) / (LA.norm(self.dhi) * LA.norm(nj)) 
-			# print(f'2nd inner term: {inner_term}')
-			if inner_term < -1.0:
-				inner_term = [[-1.0]]
-			elif inner_term > 1.0:
-				inner_term = [[1.0]]
-			theta2 = np.arccos( inner_term ) #  angle between surface normal and nominal agent trajectory
-			rho_theta = np.tanh( theta2 / theta1 )
-			# print(f'theta1: {theta1}')
-			
-		# print(f'rho_d: {rho_d}')
-		# print(f'rho_theta: {rho_theta}')
-		# print(f'rho: {rho_d[0][0] *  rho_theta[0][0]}')
-		return rho_d[0][0] *  rho_theta[0][0]
+			if theta1 < 1E-20:
+				rho_theta = [[0]]
+			else:
+				inner_term = (self.dhj @ nj) / (LA.norm(self.dhj) * LA.norm(nj)) 
+				if inner_term < -1.0:
+					inner_term = [[-1.0]]
+				elif inner_term > 1.0:
+					inner_term = [[1.0]]
+				theta2 = np.arccos( inner_term ) #  angle between surface normal and nominal agent trajectory
+				rho_theta = np.tanh( theta2 / theta1 )
+
+		# if print_stuff:
+		# 	print(f'agent n: {n}')
+		# 	print(f'alpha_dot: {(rho_d[0][0] *  rho_theta[0][0])}')
+		# 	print(f'rho_theta: {rho_theta}')
+		# 	print(f'rho_d: {rho_d}')
+		# # 	print(f'rho_theta: {rho_theta}')
+		# # # 	print(f'theta2: {theta2} ')
+		# # # 	print(f'inner_term: {inner_term}')
+
+
+		return (rho_d[0][0] *  rho_theta[0][0])
 		
 
 

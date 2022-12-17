@@ -3,7 +3,7 @@ import numpy as np
 from numpy import NAN, linalg as LA
 
 class SingleIntegrator:
-	def __init__(self, x0, r, G, alpha = 1, d_thresh = 0.7, u = np.array([[0],[0],[0]])):
+	def __init__(self, x0, r, G, alpha = 1, d_thresh = 0.1, u = np.array([[0],[0],[0]])):
 		self.X0 = x0
 		self.X = x0
 		self.G = G

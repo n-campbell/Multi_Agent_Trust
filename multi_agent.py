@@ -56,7 +56,7 @@ objective1 = cp.Minimize(10 * cp.quad_form(u1,P) + 10 * cp.square(delta1))
 constraint1 = [ ]
 constraint1 += [ dV1_dx @ u1 <= - k1 * V1 + delta1 ] # CLF
 
-input_bound = 0.5
+input_bound = 0.75
 for i in range(3):
 	constraint1 += [ cp.abs(u1[i,0]) <= input_bound ]
 
@@ -69,7 +69,7 @@ V2 = cp.Parameter()
 dV2_dx = cp.Parameter((1,3))
 P = np.identity(3)
 
-learning_rate = 1
+learning_rate = 3
 
 h2_a = []
 dhi2_dx_a = []
